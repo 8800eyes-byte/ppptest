@@ -90,7 +90,15 @@ Person (이용자 = 책)
 - `annualReviews`: { personId, year, story, happyMoments, score } — “행복한 미래 이야기” 돌아보기
 - `selfHelpGroups`: 보호자/당사자 자조모임 활동
 
-## 5. 서버 DB 설계안 (3단계, 확인 필요)
+## 5. 서버 DB — Supabase (3단계, 스키마 작성 완료)
+구현: `supabase/schema.sql`, 설정·권한표: `supabase/README.md`, 권한 시험: `supabase/tests/rls_test.mjs`(49개 시나리오).
+- 필드명은 snake_case(`birth_ym`, `worker_id`, `program_name` …). 앱 연결 시 `store.js`에서 camelCase와 변환
+- `persons.worker` 문자열 → `worker_id`(staff 참조)로 변경
+- 모든 표에 `created_by/updated_by/updated_at`(서버가 채움), `deleted_at`(보관 처리)
+- `staff`(직원 명단·역할), `audit_logs`(변경기록) 추가
+- 모든 테이블 RLS + FORCE. 담당자는 자기 담당 이용자만, 팀장은 전체, 관리자는 직원 관리·영구 삭제·변경기록
+
+### (이전 설계 메모)
 - 권장: PostgreSQL(예: Supabase/Neon 또는 기관 서버). 위 엔터티를 테이블로 1:1 매핑, `person_id` FK + `ON DELETE` 정책은 **소프트 삭제**(`deleted_at`)로 변경.
 - 추가 테이블: `users`(실무자 계정·역할), `audit_logs`(누가·언제·무엇을 조회/수정), `person_assignments`(담당자 배정).
 - 행 단위 권한: 담당자는 배정된 이용자만 수정, 팀장은 전체 조회.

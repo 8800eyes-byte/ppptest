@@ -1051,6 +1051,8 @@
     document.querySelector('.main-nav').hidden = true;
     var html = '<div class="gate"><div class="card gate-card"><span class="eyebrow">PPP 이야기 서재</span>';
     if (res.state === 'signedOut') {
+      var authErr = res.authError || authErrorFromUrl();
+      if (authErr) html += '<div class="notice danger" role="alert">' + esc(authErr) + '</div>';
       var google = window.PPP_CONFIG && window.PPP_CONFIG.googleLogin;
       html += '<h1>로그인</h1><p>기관에서 직원으로 등록한 이메일을 넣으면 로그인 링크를 보내 드립니다. 메일의 링크를 이 브라우저에서 열면 로그인됩니다.</p>' +
         '<form id="login-email" class="gate-form" novalidate><label for="login-email-input" class="sr-only">이메일</label>' +
@@ -1086,6 +1088,23 @@
     if (lo) lo.onclick = function () { S.signOut().then(function () { location.reload(); }); };
     var rt = document.getElementById('retry');
     if (rt) rt.onclick = function () { location.reload(); };
+  }
+
+  /* 로그인 링크에서 돌아왔는데 로그인되지 않았을 때, 주소에 담긴 이유를 알려 준다 */
+  function authErrorFromUrl() {
+    var params = {};
+    [location.search.slice(1), location.hash.replace(/^#\/?/, '')].forEach(function (part) {
+      part.split('&').forEach(function (kv) {
+        var i = kv.indexOf('=');
+        if (i > 0) { try { params[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } catch (e) { /* 무시 */ } }
+      });
+    });
+    var msg = '';
+    if (params.error_code === 'otp_expired') msg = '로그인 링크가 만료되었거나 이미 사용되었습니다. 링크를 새로 받아 바로 눌러 주세요.';
+    else if (params.error_description || params.error) msg = '로그인하지 못했습니다: ' + (params.error_description || params.error);
+    else if (params.code) msg = '링크를 요청한 브라우저와 다른 곳에서 링크를 연 것 같습니다. 이 브라우저에서 링크를 새로 받아, 같은 브라우저로 메일의 링크를 열어 주세요.';
+    if (msg) history.replaceState(null, '', location.pathname);
+    return msg;
   }
 
   var ROLE_LABEL = { admin: '관리자', manager: '팀장', worker: '담당자' };

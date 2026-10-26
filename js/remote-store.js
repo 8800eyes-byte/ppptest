@@ -74,8 +74,9 @@
     if (!sb) {
       if (!window.supabase || !window.supabase.createClient) throw new Error('Supabase 연결 도구를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
       sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
-        // PKCE는 로그인 결과를 주소의 ?code= 로 돌려줘 화면 라우터(#/...)와 겹치지 않는다
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' }
+        // PKCE는 로그인 결과를 주소의 ?code= 로 돌려줘 화면 라우터(#/...)와 겹치지 않는다.
+        // 링크 처리는 init()에서 직접 해서, 실패하면 이유를 화면에 보여 준다
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce' }
       });
     }
     return sb;
@@ -106,12 +107,59 @@
     });
   }
 
+  /* 로그인 링크에서 돌아온 주소(?code= / #access_token= / #error=)를 읽는다 */
+  function readAuthParams() {
+    var out = {};
+    [location.search.slice(1), location.hash.replace(/^#\/?/, '')].forEach(function (part) {
+      part.split('&').forEach(function (kv) {
+        var i = kv.indexOf('=');
+        if (i > 0) { try { out[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } catch (e) { /* 무시 */ } }
+      });
+    });
+    return out;
+  }
+
+  function cleanUrl() {
+    var route = /^#\//.test(location.hash) ? location.hash : '';
+    history.replaceState(null, '', location.pathname + route);
+  }
+
+  function authMessage(text) {
+    if (/expired|invalid/i.test(text) && /otp|link|token/i.test(text)) return '로그인 링크가 만료되었거나 이미 사용되었습니다. 링크를 새로 받아 바로 눌러 주세요.';
+    if (/verifier|flow state/i.test(text)) return '링크를 요청한 브라우저와 다른 곳에서 링크를 열었습니다. 이 브라우저에서 링크를 새로 받고, 같은 브라우저로 메일의 링크를 열어 주세요.';
+    return '로그인하지 못했습니다: ' + text;
+  }
+
+  function handleAuthRedirect(c) {
+    var p = readAuthParams();
+    if (p.code) {
+      return c.auth.exchangeCodeForSession(p.code).then(function (r) {
+        cleanUrl();
+        return r.error ? authMessage(r.error.message || String(r.error)) : null;
+      });
+    }
+    if (p.access_token && p.refresh_token) {
+      return c.auth.setSession({ access_token: p.access_token, refresh_token: p.refresh_token }).then(function (r) {
+        cleanUrl();
+        return r.error ? authMessage(r.error.message || String(r.error)) : null;
+      });
+    }
+    if (p.error || p.error_description) {
+      cleanUrl();
+      return Promise.resolve(p.error_code === 'otp_expired' ? authMessage('otp expired') : authMessage(p.error_description || p.error));
+    }
+    return Promise.resolve(null);
+  }
+
   function init() {
-    var c;
+    var c, authError = null;
     try { c = client(); } catch (e) { return Promise.resolve({ state: 'error', mode: 'remote', message: e.message }); }
-    return c.auth.getSession().then(function (res) {
+    return handleAuthRedirect(c).then(function (msg) {
+      authError = msg;
+      return c.auth.getSession();
+    }).then(function (res) {
       var session = res.data && res.data.session;
-      if (!session) return { state: 'signedOut', mode: 'remote' };
+      if (!session) return { state: 'signedOut', mode: 'remote', authError: authError };
       return c.from('staff').select('id, name, role, active, email').eq('user_id', session.user.id).maybeSingle().then(function (r) {
         if (r.error) throw friendly(r.error);
         if (!r.data || !r.data.active) return { state: 'notStaff', mode: 'remote', email: session.user.email };

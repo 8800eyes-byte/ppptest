@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PPP 이야기 서재</title>
+  <meta name="description" content="평생과정설계(PPP) 이용자의 접수·프로그램 이용·상담·평가 기록을 한 권의 책으로 모아 보는 실무자용 웹앱">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">📖</span>
+      <div>
+        <strong class="brand-title">PPP 이야기 서재</strong>
+        <span class="brand-sub">평생과정설계 이용자 기록 통합</span>
+      </div>
+    </div>
+    <nav class="main-nav" aria-label="주 메뉴">
+      <a href="#/" data-nav="home">서재</a>
+      <a href="#/analytics" data-nav="analytics">분석</a>
+      <a href="#/data" data-nav="data">데이터 관리</a>
+    </nav>
+    <div class="font-ctrl" role="group" aria-label="글자 크기">
+      <button type="button" data-font="-1" aria-label="글자 작게">가<small>−</small></button>
+      <button type="button" data-font="0" aria-label="글자 크기 기본">가</button>
+      <button type="button" data-font="1" aria-label="글자 크게">가<small>+</small></button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" role="status" hidden></div>
+
+  <main id="main" tabindex="-1"></main>
+
+  <dialog id="modal" aria-labelledby="modal-title">
+    <form id="modal-form" method="dialog" novalidate>
+      <header class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button type="button" class="icon-btn" data-close aria-label="닫기">✕</button>
+      </header>
+      <div id="modal-body" class="modal-body"></div>
+      <p id="modal-error" class="form-error" role="alert" hidden></p>
+      <footer class="modal-foot">
+        <button type="button" class="btn ghost" data-close>취소</button>
+        <button type="submit" class="btn primary" id="modal-submit">저장</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/sample-data.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -470,3 +470,21 @@ main.village-mode { max-width: none; padding: 0; }
 .gate-or::before, .gate-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .gate-form { display: flex; gap: 8px; }
 .gate-form .input { flex: 1; min-width: 0; }
+.gate-stack { display: flex; flex-direction: column; gap: 6px; }
+.gate-stack label { font-size: .88rem; font-weight: 500; color: var(--text-2); }
+.gate-stack .gate-btn { margin-top: 8px; }
+.gate-more summary { cursor: pointer; color: var(--navy-700); font-size: .9rem; }
+.gate-more[open] { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- AI 분석 ---------- */
+.ai-panel { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; border-color: var(--gold-300); }
+.ai-panel .notice { margin: 0; }
+.ai-check { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-weight: 500; }
+.ai-result h4 { margin: 14px 0 4px; font-size: .92rem; color: var(--navy-800); }
+.ai-result p, .ai-result li { font-size: .92rem; }
+.ai-result ul { margin: 0; padding-left: 20px; }
+.ai-goals { list-style: none; padding: 0 !important; display: flex; flex-direction: column; gap: 8px; }
+.ai-goals li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--paper); }
+.ai-goals li > div { min-width: 0; }
+.ai-raw { white-space: pre-wrap; font-size: .85rem; background: var(--paper); padding: 10px; border-radius: 8px; }
+.ai-meta { margin-top: 12px; font-size: .8rem; }

@@ -33,6 +33,13 @@
 6. **앱에 넣을 값**: Project Settings → API의 **Project URL**과 **anon public key**만 사용합니다. 이 두 값은 화면에 공개되어도 RLS가 막아 줍니다.
    - ⚠️ **service_role key는 앱·문서·메신저 어디에도 넣지 마세요.** RLS를 무시하는 관리자 키입니다.
 
+## 직원 계정 만들기 (비밀번호 로그인, 메일 발송 없음)
+Authentication → **Users → Add user → Create new user**
+- Email: 직원 이메일(소문자), Password: 임시 비밀번호
+- **Auto Confirm User 체크** (체크해야 메일 인증 없이 바로 로그인)
+- 같은 이메일이 이미 목록에 있으면(메일 링크를 받은 적이 있으면) 그 사용자를 먼저 **Delete user** 한 뒤 다시 만듭니다.
+- 그리고 `staff`에 같은 이메일을 등록합니다(관리자는 이미 등록됨). 계정과 명단은 이메일로 자동 연결됩니다.
+
 ## 로그인 주소 설정 (꼭 필요)
 Authentication → **URL Configuration**
 - **Site URL**: 앱을 여는 주소(예: Vercel 주소 `https://ppp-xxxx.vercel.app`)

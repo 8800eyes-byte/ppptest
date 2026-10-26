@@ -383,6 +383,7 @@
         });
       };
     });
+    root.querySelectorAll('[data-ai-box]').forEach(function (box) { bindAi(box, p); });
     root.querySelectorAll('[data-goto]').forEach(function (b) {
       b.onclick = function () {
         var id = b.getAttribute('data-goto');
@@ -390,6 +391,74 @@
         else selectChapter(id);
       };
     });
+  }
+
+  /* ---------- AI 분석(서버 모드) ---------- */
+  ui.ai = {};
+  ui.aiApproved = false;
+
+  function aiList(title, arr) {
+    if (!arr || !arr.length) return '';
+    return '<h4>' + esc(title) + '</h4><ul>' + arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+  }
+
+  function aiHtml(pid) {
+    var st = ui.ai[pid] || {};
+    var head = '<div class="ai-head"><div><h3>AI 분석 초안</h3><p class="desc">상담·목표·프로그램·평가 기록을 Gemini가 읽고 회의 준비용 초안을 만듭니다. ' +
+      '이름·관리코드·참석자·연락처는 빼고 보냅니다. 결과는 저장되지 않으며 담당자가 검토해서 씁니다.</p></div></div>';
+    var confirm = ui.aiApproved ? '' :
+      '<div class="notice"><strong>시험 단계:</strong> 무료 AI 키는 입력 내용이 Google 서비스 개선에 쓰일 수 있습니다. 기관 승인과 유료 키 전환 전에는 <strong>가상(시험) 데이터로만</strong> 사용하세요.' +
+      '<label class="ai-check"><input type="checkbox" data-ai-ok> 이 이용자는 가상(시험) 데이터입니다</label></div>';
+    var btn = '<button type="button" class="btn primary" data-ai-run' + (st.loading ? ' disabled' : '') + '>' + (st.loading ? '분석 중… (10~30초)' : (st.data ? '다시 분석' : 'AI로 분석하기')) + '</button>';
+    var body = '';
+    if (st.error) body = '<p class="form-error" role="alert">' + esc(st.error) + '</p>';
+    if (st.data) {
+      var r = st.data.result;
+      if (!r) body += '<pre class="ai-raw">' + esc(st.data.raw || '') + '</pre>';
+      else {
+        body += '<div class="ai-result">' +
+          (r.변화_요약 ? '<h4>변화 요약</h4><p>' + esc(r.변화_요약) + '</p>' : '') +
+          aiList('강점', r.강점) + aiList('살펴볼 점', r.살펴볼_점) + aiList('회의 논의거리', r.회의_논의거리) +
+          ((r.목표_제안 || []).length ? '<h4>목표 제안</h4><ul class="ai-goals">' + r.목표_제안.map(function (g, i) {
+            return '<li><div><span class="chip">' + esc(g.영역 || '') + '</span><span class="chip navy">' + esc(g.구분 || '') + '</span> <strong>' + esc(g.목표 || '') + '</strong>' +
+              (g.실천계획 ? '<br><span class="muted">실천계획: ' + esc(g.실천계획) + '</span>' : '') +
+              (g.근거 ? '<br><span class="muted">근거: ' + esc(g.근거) + '</span>' : '') + '</div>' +
+              '<button type="button" class="btn small" data-ai-goal="' + i + '">목표로 추가</button></li>';
+          }).join('') + '</ul>' : '') +
+          aiList('다음 상담에서 물어볼 것', r.다음_상담_질문) + aiList('기록 보완 제안', r.기록_보완_제안) +
+          '<p class="muted ai-meta">AI 초안 · ' + esc(st.data.model || '') + ' · ' + esc((st.data.generatedAt || '').slice(0, 16).replace('T', ' ')) + ' · 사실 여부와 표현은 담당자가 확인하세요.</p></div>';
+      }
+    }
+    return head + confirm + '<div class="row-actions">' + btn + '</div>' + body;
+  }
+
+  function bindAi(box, p) {
+    var run = box.querySelector('[data-ai-run]');
+    if (run) run.onclick = function () {
+      var ok = box.querySelector('[data-ai-ok]');
+      if (ok && !ok.checked) { ui.ai[p.id] = Object.assign({}, ui.ai[p.id], { error: '가상(시험) 데이터인지 확인하는 칸에 체크해 주세요.' }); rerender(); return; }
+      ui.ai[p.id] = Object.assign({}, ui.ai[p.id], { loading: true, error: null });
+      rerender();
+      S.aiAnalyze(p.id).then(function (data) {
+        ui.aiApproved = !!data.realDataApproved;
+        ui.ai[p.id] = { data: data };
+      }, function (e) {
+        ui.ai[p.id] = Object.assign({}, ui.ai[p.id], { loading: false, error: e.message });
+      }).then(rerender);
+    };
+    box.querySelectorAll('[data-ai-goal]').forEach(function (b) {
+      b.onclick = function () {
+        var g = ui.ai[p.id].data.result.목표_제안[+b.getAttribute('data-ai-goal')];
+        recordForm('goals', p, null, {
+          term: g.구분 === '중장기' ? '중장기' : '단기',
+          domain: S.DOMAINS.indexOf(g.영역) >= 0 ? g.영역 : '',
+          text: (g.목표 || '').slice(0, 200), plan: (g.실천계획 || '').slice(0, 1000)
+        });
+      };
+    });
+    function rerender() {
+      document.querySelectorAll('[data-ai-box="' + p.id + '"]').forEach(function (bx) { bx.innerHTML = aiHtml(p.id); bindAi(bx, p); });
+    }
   }
 
   function refreshView() {
@@ -444,7 +513,7 @@
         '<div class="panel"><h3>평가 점수 추이</h3><p class="desc">‘점수로 평가하기’ 10점 만점 · 당사자 vs 담당자</p><div id="c-eval"></div></div>' +
         '<div class="panel"><h3>최근 6개월 활동</h3><p class="desc">월별 프로그램 참여 횟수</p><div id="c-month"></div></div>' +
         '<div class="panel"><h3>진행 중인 목표</h3>' + goalMiniList(s.goals) + '</div>' +
-        '</div>';
+        '</div>' + (S.isRemote() ? '<div class="panel ai-panel no-print" data-ai-box="' + esc(p.id) + '">' + aiHtml(p.id) + '</div>' : '');
     }
     if (c.id === 'intake') {
       var intakes = S.list('intakes', p.id).sort(byDateDesc);
@@ -836,11 +905,12 @@
     }, !p);
   }
 
-  function recordForm(col, p, rec) {
+  function recordForm(col, p, rec, preset) {
     var defaults = { date: today(), personId: p.id };
     if (col === 'goals') defaults = { personId: p.id, startDate: today(), status: '진행', term: '단기' };
     if (col === 'programs') defaults.attendance = '참여';
     if (col === 'evaluations') defaults.period = '분기';
+    if (preset) defaults = Object.assign(defaults, preset);
     openForm(col, rec || defaults, function (r) {
       r.personId = p.id;
       return Promise.resolve(S.upsert(col, r)).then(function () {
@@ -1054,12 +1124,18 @@
       var authErr = res.authError || authErrorFromUrl();
       if (authErr) html += '<div class="notice danger" role="alert">' + esc(authErr) + '</div>';
       var google = window.PPP_CONFIG && window.PPP_CONFIG.googleLogin;
-      html += '<h1>로그인</h1><p>기관에서 직원으로 등록한 이메일을 넣으면 로그인 링크를 보내 드립니다. 메일의 링크를 이 브라우저에서 열면 로그인됩니다.</p>' +
+      html += '<h1>로그인</h1><p>관리자가 만들어 준 이메일과 비밀번호로 로그인하세요.</p>' +
+        '<form id="login-pw" class="gate-stack" novalidate>' +
+        '<label for="login-pw-email">이메일</label><input id="login-pw-email" class="input" type="email" autocomplete="username" placeholder="name@기관도메인" required>' +
+        '<label for="login-pw-pass">비밀번호</label><input id="login-pw-pass" class="input" type="password" autocomplete="current-password" required>' +
+        '<button type="submit" class="btn primary gate-btn">로그인</button></form><p id="login-pw-msg" class="muted" role="status"></p>' +
+        '<details class="gate-more"><summary>비밀번호 없이 메일 링크로 로그인</summary>' +
+        '<p class="muted">메일의 링크를 이 브라우저에서 열면 로그인됩니다. 무료 메일 발송은 시간당 몇 통으로 제한됩니다.</p>' +
         '<form id="login-email" class="gate-form" novalidate><label for="login-email-input" class="sr-only">이메일</label>' +
         '<input id="login-email-input" class="input" type="email" autocomplete="email" placeholder="name@기관도메인" required>' +
-        '<button type="submit" class="btn primary">로그인 링크 받기</button></form><p id="login-msg" class="muted" role="status"></p>' +
+        '<button type="submit" class="btn">링크 받기</button></form><p id="login-msg" class="muted" role="status"></p></details>' +
         (google ? '<div class="gate-or"><span>또는</span></div><button type="button" class="btn gate-btn" id="login-google">Google 계정으로 로그인</button>' : '') +
-        '<p class="muted">등록되지 않은 이메일은 로그인해도 기록을 볼 수 없습니다.</p>';
+        '<p class="muted">등록되지 않은 계정은 로그인해도 기록을 볼 수 없습니다.</p>';
     } else if (res.state === 'notStaff') {
       html += '<h1>직원 등록이 필요합니다</h1><p><strong>' + esc(res.email || '') + '</strong> 계정은 아직 직원 명단에 없거나 사용이 중지되었습니다.</p>' +
         '<p>관리자에게 이 이메일로 직원 등록을 요청하세요. 등록 후 다시 로그인하면 바로 사용할 수 있습니다.</p>' +
@@ -1072,6 +1148,17 @@
     var g = document.getElementById('login-google');
     if (g) g.onclick = function () {
       S.signInGoogle().catch(function (e) { document.getElementById('login-msg').textContent = e.message; });
+    };
+    var pw = document.getElementById('login-pw');
+    if (pw) pw.onsubmit = function (e) {
+      e.preventDefault();
+      var email = document.getElementById('login-pw-email').value.trim().toLowerCase();
+      var pass = document.getElementById('login-pw-pass').value;
+      var msg = document.getElementById('login-pw-msg');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = '이메일 주소를 확인하세요.'; return; }
+      if (!pass) { msg.textContent = '비밀번호를 입력하세요.'; return; }
+      msg.textContent = '로그인 중…';
+      S.signInPassword(email, pass).then(function () { location.reload(); }, function (er) { msg.textContent = er.message; });
     };
     var f = document.getElementById('login-email');
     if (f) f.onsubmit = function (e) {

@@ -35,6 +35,7 @@ js/charts.js          SVG 차트(가로 막대·세로 막대·선) + 툴팁 + �
 js/village.js         3D 마을·집 안 방(three.js), 장 내용은 app.js의 PPPApp 함수 재사용
 js/app.js             라우터, 화면 렌더링, 입력 폼·검증
 supabase/schema.sql   Supabase 스키마(모든 테이블 RLS), supabase/tests = 권한 시험
+api/analyze.js        Vercel 서버 함수: AI(Gemini) 분석 초안, api/tests = 시험(node api/tests/analyze_test.js)
 *.md                  설계 문서
 ```
 
@@ -48,7 +49,8 @@ supabase/schema.sql   Supabase 스키마(모든 테이블 RLS), supabase/tests =
 
 ## 6. 금지사항
 - 실제 이용자 정보·사진을 샘플/테스트/스크린샷에 사용
-- 외부 분석 도구(GA 등)·외부 API로 이용자 데이터 전송
+- 외부 분석 도구(GA 등)·외부 API로 이용자 데이터 전송. 예외는 `api/analyze.js`(Gemini) 하나: 로그인·직원 확인, RLS로 읽기, 이름·코드·참석자·연락처 제거, 결과 미저장을 유지하고, 실제 이용자 데이터는 기관 승인 + 유료 키 이후(`AI_REAL_DATA_APPROVED=true`)에만
+- AI 키(GEMINI_API_KEY)는 Vercel 환경 변수(Secret)에만. 브라우저 코드·저장소에 넣지 않는다
 - 백업 검증(`validateBackup`)을 건너뛰는 복원 경로
 - RLS를 끄거나 `using (true)` 같은 전체 허용 정책 추가, service_role key를 앱·저장소에 넣기
 - schema.sql 권한을 바꾸면 `supabase/tests/rls_test.mjs`에 시나리오를 추가하고 통과 확인

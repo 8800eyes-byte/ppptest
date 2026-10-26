@@ -63,6 +63,7 @@
     else if (code === '23514') text = '입력값이 허용 범위를 벗어났습니다.';
     else if (code === '23505') text = '이미 있는 값과 겹칩니다.';
     else if (code === 'PGRST116') text = '기록을 찾을 수 없거나 권한이 없습니다.';
+    else if (/rate limit/i.test(msg)) text = '메일 발송 한도를 넘었습니다. 1시간쯤 뒤에 다시 시도하거나 비밀번호로 로그인하세요.';
     else if (/fetch|network/i.test(msg)) text = '서버에 연결할 수 없습니다. 인터넷 연결을 확인하세요.';
     else text = msg;
     var e = new Error(text);
@@ -176,6 +177,16 @@
       .then(function (res) { if (res.error) throw friendly(res.error); });
   }
 
+  function signInPassword(email, password) {
+    return client().auth.signInWithPassword({ email: email, password: password }).then(function (res) {
+      if (res.error) {
+        if (/invalid login credentials/i.test(res.error.message)) throw new Error('이메일 또는 비밀번호가 맞지 않습니다.');
+        if (/not confirmed/i.test(res.error.message)) throw new Error('아직 인증되지 않은 계정입니다. 관리자에게 “Auto Confirm User”로 계정을 다시 만들어 달라고 요청하세요.');
+        throw friendly(res.error);
+      }
+    });
+  }
+
   function signInEmail(email) {
     return client().auth.signInWithOtp({ email: email, options: { emailRedirectTo: redirectUrl() } })
       .then(function (res) { if (res.error) throw friendly(res.error); });
@@ -285,6 +296,27 @@
       .then(function () { return result; });
   }
 
+  /* AI 분석: 로그인 토큰을 함께 보내 서버가 직원 여부와 RLS 권한을 확인한다 */
+  function aiAnalyze(personId) {
+    return client().auth.getSession().then(function (res) {
+      var token = res.data && res.data.session && res.data.session.access_token;
+      if (!token) throw new Error('로그인이 만료되었습니다. 다시 로그인하세요.');
+      return fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ personId: personId })
+      });
+    }).then(function (r) {
+      return r.json().catch(function () { return { error: 'AI 서버 응답을 읽지 못했습니다(' + r.status + ').' }; }).then(function (j) {
+        if (!r.ok) throw new Error(j.error || ('AI 분석 실패 (' + r.status + ')'));
+        return j;
+      });
+    }, function (e) {
+      if (e instanceof TypeError) throw new Error('AI 서버에 연결할 수 없습니다.');
+      throw e;
+    });
+  }
+
   function staffOptions() {
     return staff.filter(function (s) { return s.active; }).map(function (s) { return { value: s.id, label: s.name }; });
   }
@@ -295,8 +327,8 @@
     isRemote: function () { return true; },
     me: function () { return me; },
     staffOptions: staffOptions,
-    signInGoogle: signInGoogle, signInEmail: signInEmail, signOut: signOut,
-    importToServer: importToServer, reload: loadAll,
+    signInGoogle: signInGoogle, signInEmail: signInEmail, signInPassword: signInPassword, signOut: signOut,
+    importToServer: importToServer, reload: loadAll, aiAnalyze: aiAnalyze,
     isStorageOk: function () { return true; }
   });
 })();

@@ -55,6 +55,20 @@
     toast._t = setTimeout(function () { t.classList.remove('show'); }, 2400);
   }
 
+  /* 브라우저 confirm()은 일부 내장 화면(미리보기 등)에서 막히므로 페이지 안 확인창을 쓴다 */
+  function ask(message, okLabel, onYes, onNo) {
+    var dlg = document.getElementById('confirm');
+    document.getElementById('confirm-msg').textContent = message;
+    var ok = document.getElementById('confirm-ok');
+    ok.textContent = okLabel;
+    var answered = false;
+    ok.onclick = function () { answered = true; dlg.close(); onYes(); };
+    document.getElementById('confirm-cancel').onclick = function () { dlg.close(); };
+    dlg.onclose = function () { if (!answered && onNo) onNo(); };
+    dlg.showModal();
+    document.getElementById('confirm-cancel').focus();
+  }
+
   function stageBadge(stage) { return '<span class="stage-badge" data-stage="' + esc(stage) + '">' + esc(stage) + '</span>'; }
 
   /* ---------- 이용자별 요약 지표 ---------- */
@@ -312,11 +326,14 @@
     drawPersonCharts(p, s);
 
     document.getElementById('edit-person').onclick = function () { personForm(p); };
-    document.getElementById('print-book').onclick = function () { window.print(); };
+    document.getElementById('print-book').onclick = function () {
+      if (window.PPP_PREVIEW) { toast('미리보기에서는 인쇄가 막혀 있습니다. 설치한 앱에서 사용하세요.'); return; }
+      window.print();
+    };
     document.getElementById('del-person').onclick = function () {
-      if (confirm('“' + p.name + '”님의 책과 모든 기록(접수·계획·프로그램·상담·평가)을 삭제합니다.\n삭제 전에 데이터 관리에서 백업을 권장합니다. 계속할까요?')) {
+      ask('“' + p.name + '”님의 책과 모든 기록(접수·계획·프로그램·상담·평가)을 삭제합니다. 삭제 전에 데이터 관리에서 백업을 권장합니다.', '삭제', function () {
         S.remove('persons', p.id); toast('삭제했습니다.'); location.hash = '#/';
-      }
+      });
     };
 
     var tabs = Array.from(document.querySelectorAll('.toc [role="tab"]'));
@@ -344,7 +361,7 @@
     $main.querySelectorAll('[data-del]').forEach(function (b) {
       b.onclick = function () {
         var parts = b.getAttribute('data-del').split(':');
-        if (confirm('이 기록을 삭제할까요? 되돌릴 수 없습니다.')) { S.remove(parts[0], parts[1]); toast('기록을 삭제했습니다.'); route(); }
+        ask('이 기록을 삭제합니다. 되돌릴 수 없습니다.', '삭제', function () { S.remove(parts[0], parts[1]); toast('기록을 삭제했습니다.'); route(); });
       };
     });
     $main.querySelectorAll('[data-goto]').forEach(function (b) {
@@ -606,6 +623,7 @@
       '</div>';
 
     document.getElementById('backup').onclick = function () {
+      if (window.PPP_PREVIEW) { toast('미리보기에서는 파일 내려받기가 막혀 있습니다.'); return; }
       var blob = new Blob([S.exportJson()], { type: 'application/json' });
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -626,20 +644,21 @@
         try { parsed = JSON.parse(text); } catch (err) { msg.textContent = '복원 실패: JSON 형식이 올바르지 않습니다.'; return; }
         var check = S.validateBackup(parsed);
         if (!check.ok) { msg.textContent = '복원 실패: ' + check.errors.join(' / '); return; }
-        if (!confirm('이용자 ' + parsed.persons.length + '명의 데이터로 현재 데이터를 모두 바꿉니다. 계속할까요?')) { msg.textContent = '복원을 취소했습니다.'; return; }
-        var r = S.importJson(text);
-        if (r.ok) { toast('복원했습니다.'); renderData(); }
-        else msg.textContent = '복원 실패: ' + r.errors.join(' / ');
+        ask('이용자 ' + parsed.persons.length + '명의 데이터로 현재 데이터를 모두 바꿉니다.', '복원', function () {
+          var r = S.importJson(text);
+          if (r.ok) { toast('복원했습니다.'); renderData(); }
+          else msg.textContent = '복원 실패: ' + r.errors.join(' / ');
+        }, function () { msg.textContent = '복원을 취소했습니다.'; });
       };
       reader.onerror = function () { msg.textContent = '파일을 읽지 못했습니다.'; };
       reader.readAsText(f, 'utf-8');
       e.target.value = '';
     };
     document.getElementById('load-sample').onclick = function () {
-      if (confirm('현재 데이터를 지우고 가상 샘플 데이터로 바꿉니다. 계속할까요?')) { S.resetToSample(); toast('샘플 데이터를 불러왔습니다.'); renderData(); }
+      ask('현재 데이터를 지우고 가상 샘플 데이터로 바꿉니다.', '샘플 불러오기', function () { S.resetToSample(); toast('샘플 데이터를 불러왔습니다.'); renderData(); });
     };
     document.getElementById('clear-all').onclick = function () {
-      if (confirm('모든 데이터를 지웁니다. 되돌릴 수 없습니다. 먼저 백업하셨나요?')) { S.clearAll(); toast('모든 데이터를 지웠습니다.'); renderData(); }
+      ask('모든 데이터를 지웁니다. 되돌릴 수 없습니다. 먼저 백업하셨나요?', '모두 지우기', function () { S.clearAll(); toast('모든 데이터를 지웠습니다.'); renderData(); });
     };
   }
 

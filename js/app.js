@@ -96,14 +96,26 @@
   function route() {
     window.Charts.hideTip();
     var h = location.hash.replace(/^#\/?/, '').split('/');
-    var nav = 'home';
-    if (h[0] === 'person' && h[1]) {
+    var nav = 'village';
+    var isVillage = h[0] === '' || h[0] === 'village';
+    if (!isVillage && window.Village && window.Village.isMounted()) window.Village.unmount();
+    if (!isVillage) $main.classList.remove('village-mode');
+    if (!isVillage) document.title = 'PPP 이야기 서재';
+    ui.refresh = null;
+    if (isVillage) {
+      var V = window.Village;
+      if (!V || !V.isMounted()) {
+        if (V && V.mount($main)) V.navigate(h[1] ? decodeURIComponent(h[1]) : null, h[2]);
+      } else V.navigate(h[1] ? decodeURIComponent(h[1]) : null, h[2]);
+      if (V && V.isMounted()) ui.refresh = V.refresh;
+    } else if (h[0] === 'library') { nav = 'library'; renderHome(); }
+    else if (h[0] === 'person' && h[1]) {
       var p = S.get('persons', decodeURIComponent(h[1]));
       if (!p) { renderNotFound(); }
       else { if (h[2]) ui.chapter = h[2]; renderPerson(p); }
     } else if (h[0] === 'analytics') { nav = 'analytics'; renderAnalytics(); }
     else if (h[0] === 'data') { nav = 'data'; renderData(); }
-    else renderHome();
+    else { nav = 'library'; renderHome(); }
     document.querySelectorAll('[data-nav]').forEach(function (a) {
       if (a.getAttribute('data-nav') === nav && h[0] !== 'person') a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -111,7 +123,7 @@
   }
 
   function renderNotFound() {
-    $main.innerHTML = '<div class="empty"><strong>해당 이용자를 찾을 수 없습니다.</strong>삭제되었거나 잘못된 주소입니다.<br><br><a class="btn" href="#/">서재로 돌아가기</a></div>';
+    $main.innerHTML = '<div class="empty"><strong>해당 이용자를 찾을 수 없습니다.</strong>삭제되었거나 잘못된 주소입니다.<br><br><a class="btn" href="#/library">서재로 돌아가기</a></div>';
   }
 
   /* ---------- 서재(대시보드) ---------- */
@@ -289,7 +301,7 @@
     if (!CHAPTERS.some(function (c) { return c.id === ui.chapter; })) ui.chapter = 'summary';
 
     var left = '<aside class="page-left" data-stage="' + esc(p.stage) + '">' +
-      '<a href="#/" class="btn small no-print" style="margin-bottom:18px">← 서재로</a>' +
+      '<a href="#/library" class="btn small no-print" style="margin-bottom:18px">← 서재로</a>' +
       '<div class="code">' + esc(p.code) + '</div><h1>' + esc(p.name) + '</h1>' +
       '<div class="facts">' + esc([p.gender, p.birthYM ? p.birthYM.replace('-', '년 ') + '월생 (' + age(p.birthYM) + ')' : '', p.disabilityType].filter(Boolean).join(' · ')) + '</div>' +
       stageBadge(p.stage) +
@@ -332,7 +344,7 @@
     };
     document.getElementById('del-person').onclick = function () {
       ask('“' + p.name + '”님의 책과 모든 기록(접수·계획·프로그램·상담·평가)을 삭제합니다. 삭제 전에 데이터 관리에서 백업을 권장합니다.', '삭제', function () {
-        S.remove('persons', p.id); toast('삭제했습니다.'); location.hash = '#/';
+        S.remove('persons', p.id); toast('삭제했습니다.'); location.hash = '#/library';
       });
     };
 
@@ -349,24 +361,37 @@
       };
     });
 
-    $main.querySelectorAll('[data-add]').forEach(function (b) {
+    bindChapterActions($main, p);
+  }
+
+  /* 장 안의 추가·수정·삭제 버튼 연결 — 펼친 책과 3D 마을의 방 패널이 함께 쓴다 */
+  function bindChapterActions(root, p) {
+    root.querySelectorAll('[data-add]').forEach(function (b) {
       b.onclick = function () { recordForm(b.getAttribute('data-add'), p); };
     });
-    $main.querySelectorAll('[data-edit]').forEach(function (b) {
+    root.querySelectorAll('[data-edit]').forEach(function (b) {
       b.onclick = function () {
         var parts = b.getAttribute('data-edit').split(':');
         recordForm(parts[0], p, S.get(parts[0], parts[1]));
       };
     });
-    $main.querySelectorAll('[data-del]').forEach(function (b) {
+    root.querySelectorAll('[data-del]').forEach(function (b) {
       b.onclick = function () {
         var parts = b.getAttribute('data-del').split(':');
-        ask('이 기록을 삭제합니다. 되돌릴 수 없습니다.', '삭제', function () { S.remove(parts[0], parts[1]); toast('기록을 삭제했습니다.'); route(); });
+        ask('이 기록을 삭제합니다. 되돌릴 수 없습니다.', '삭제', function () { S.remove(parts[0], parts[1]); toast('기록을 삭제했습니다.'); refreshView(); });
       };
     });
-    $main.querySelectorAll('[data-goto]').forEach(function (b) {
-      b.onclick = function () { selectChapter(b.getAttribute('data-goto')); };
+    root.querySelectorAll('[data-goto]').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-goto');
+        if (ui.refresh) location.hash = '#/village/' + encodeURIComponent(p.id) + '/' + id;
+        else selectChapter(id);
+      };
     });
+  }
+
+  function refreshView() {
+    if (!(ui.refresh && ui.refresh())) route();
   }
 
   function selectChapter(id) {
@@ -742,7 +767,7 @@
     openForm('persons', p || { code: S.nextPersonCode(), stage: '준비', enrolledAt: today(), priorities: [] }, function (rec) {
       var saved = S.upsert('persons', rec);
       toast(p ? '이용자 정보를 수정했습니다.' : '새 책을 만들었습니다.');
-      if (p) route(); else { ui.chapter = 'intake'; location.hash = '#/person/' + encodeURIComponent(saved.id); }
+      if (p) refreshView(); else { ui.chapter = 'intake'; location.hash = '#/person/' + encodeURIComponent(saved.id); }
     }, !p);
   }
 
@@ -755,7 +780,7 @@
       r.personId = p.id;
       S.upsert(col, r);
       toast(rec ? '기록을 수정했습니다.' : '기록을 추가했습니다.');
-      route();
+      refreshView();
     }, !rec);
   }
 
@@ -905,6 +930,12 @@
     };
   });
 
+  window.PPPApp = {
+    MONITOR_DAYS: MONITOR_DAYS, CHAPTERS: CHAPTERS, esc: esc, today: today, fmtDate: fmtDate, daysBetween: daysBetween,
+    stageBadge: stageBadge, personStats: personStats, chapterHtml: chapterHtml,
+    bindChapterActions: bindChapterActions, drawPersonCharts: drawPersonCharts
+  };
+
   /* ---------- 시작 ---------- */
   var loaded = S.load();
   var banner = document.getElementById('banner');
@@ -913,9 +944,13 @@
     banner.textContent = '가상 샘플 데이터로 시작했습니다. 실제 이용자 정보가 아닙니다. 데이터는 이 브라우저에만 저장됩니다.';
   }
   window.addEventListener('hashchange', function () {
+    var wasVillage = window.Village && window.Village.isMounted();
     route();
-    $main.focus({ preventScroll: true });
-    window.scrollTo(0, 0);
+    // 마을 안에서 집·방을 옮길 때는 3D 화면 초점을 빼앗지 않는다
+    if (!(wasVillage && window.Village.isMounted())) {
+      $main.focus({ preventScroll: true });
+      window.scrollTo(0, 0);
+    }
   });
   route();
 })();

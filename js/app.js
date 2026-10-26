@@ -344,7 +344,7 @@
     };
     document.getElementById('del-person').onclick = function () {
       ask('“' + p.name + '”님의 책과 모든 기록(접수·계획·프로그램·상담·평가)을 삭제합니다. 삭제 전에 데이터 관리에서 백업을 권장합니다.', '삭제', function () {
-        S.remove('persons', p.id); toast('삭제했습니다.'); location.hash = '#/library';
+        Promise.resolve(S.remove('persons', p.id)).then(function () { toast('삭제했습니다.'); location.hash = '#/library'; }, function (e) { toast(e.message); });
       });
     };
 
@@ -378,7 +378,9 @@
     root.querySelectorAll('[data-del]').forEach(function (b) {
       b.onclick = function () {
         var parts = b.getAttribute('data-del').split(':');
-        ask('이 기록을 삭제합니다. 되돌릴 수 없습니다.', '삭제', function () { S.remove(parts[0], parts[1]); toast('기록을 삭제했습니다.'); refreshView(); });
+        ask(S.isRemote() ? '이 기록을 삭제합니다. 관리자는 보관함에서 되살릴 수 있습니다.' : '이 기록을 삭제합니다. 되돌릴 수 없습니다.', '삭제', function () {
+          Promise.resolve(S.remove(parts[0], parts[1])).then(function () { toast('기록을 삭제했습니다.'); refreshView(); }, function (e) { toast(e.message); });
+        });
       };
     });
     root.querySelectorAll('[data-goto]').forEach(function (b) {
@@ -628,7 +630,75 @@
   }
 
   /* ---------- 데이터 관리 ---------- */
+  function downloadBackup() {
+    if (window.PPP_PREVIEW) { toast('미리보기에서는 파일 내려받기가 막혀 있습니다.'); return; }
+    var blob = new Blob([S.exportJson()], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ppp-backup-' + today() + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    toast('백업 파일을 내려받았습니다.');
+  }
+
+  function renderDataRemote() {
+    var c = S.counts(), me = S.me();
+    var canImport = me && (me.role === 'admin' || me.role === 'manager');
+    $main.innerHTML = '<div class="page-head"><div><span class="eyebrow">DATA</span><h1>데이터 관리</h1><p>Supabase 서버에 저장된 기록을 관리합니다.</p></div></div>' +
+      '<div class="notice">서버에 연결되어 있습니다. 로그인: <strong>' + esc(me.name) + '</strong> (' + esc(ROLE_LABEL[me.role] || me.role) + '). ' +
+      (me.role === 'worker' ? '담당 이용자의 기록만 보입니다.' : '전체 이용자의 기록이 보입니다.') +
+      ' 다른 직원이 고친 내용은 새로고침하면 보입니다.</div>' +
+      '<div class="stack">' +
+      '<section class="card"><h2>내가 볼 수 있는 데이터</h2><div class="table-wrap"><table class="data-table compact"><tbody>' +
+      [['이용자', c.persons], ['초기접수', c.intakes], ['목표', c.goals], ['프로그램 이용', c.programs], ['상담·회의', c.consultations], ['평가', c.evaluations]].map(function (r) {
+        return '<tr><th scope="row">' + r[0] + '</th><td class="num">' + r[1] + '건</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div class="row-actions" style="margin-top:12px"><button type="button" class="btn" id="reload">서버에서 다시 불러오기</button></div></section>' +
+      '<section class="card"><h2>백업 내려받기</h2><p>지금 보이는 데이터를 JSON 파일로 저장합니다. 이용자 정보가 들어 있으므로 기관이 정한 보안 저장소에만 보관하세요.</p>' +
+      '<button type="button" class="btn primary" id="backup">백업 파일 내려받기</button></section>' +
+      (canImport ? '<section class="card"><h2>서버로 옮기기</h2><p>예전 브라우저 버전에서 내려받은 백업 파일을 서버에 <strong>추가</strong>합니다. 기존 서버 데이터는 지워지지 않습니다. ' +
+        '관리코드는 서버가 새로 매기고, 담당자 이름이 직원 명단과 같으면 그 직원에게, 아니면 나에게 배정됩니다.</p>' +
+        '<div class="row-actions"><label class="btn" for="import-file">백업 파일 선택…</label><input type="file" id="import-file" accept="application/json,.json" class="sr-only">' +
+        '<button type="button" class="btn" id="import-sample">시험용 가상 데이터 12명 넣기</button></div>' +
+        '<p id="import-msg" class="muted" role="status"></p>' +
+        '<p class="muted">시험이 끝나면 관리자가 Supabase SQL Editor에서 시험 데이터를 지울 수 있습니다(supabase/README.md).</p></section>' : '') +
+      '</div>';
+
+    document.getElementById('backup').onclick = downloadBackup;
+    document.getElementById('reload').onclick = function () {
+      S.reload().then(function () { toast('다시 불러왔습니다.'); renderDataRemote(); }, function (e) { toast(e.message); });
+    };
+    if (!canImport) return;
+    var msg = document.getElementById('import-msg');
+    function run(obj, label) {
+      ask(label + '을(를) 서버에 추가합니다. 이용자 ' + obj.persons.length + '명.', '추가', function () {
+        msg.textContent = '옮기는 중…';
+        S.importToServer(obj, function (step) { msg.textContent = '옮기는 중… ' + step; }).then(function (r) {
+          msg.textContent = '완료: 이용자 ' + r.persons + '명, 기록 ' + r.records + '건' + (r.errors.length ? ' · 문제 ' + r.errors.length + '건: ' + r.errors.slice(0, 3).join(' / ') : '');
+          toast('서버로 옮겼습니다.');
+        }, function (e) { msg.textContent = '옮기지 못했습니다. ' + e.message; });
+      });
+    }
+    document.getElementById('import-sample').onclick = function () { run(window.PPP_SAMPLE(), '시험용 가상 데이터'); };
+    document.getElementById('import-file').onchange = function (e) {
+      var f = e.target.files[0];
+      if (!f) return;
+      if (f.size > 20 * 1024 * 1024) { msg.textContent = '파일이 너무 큽니다(20MB 초과).'; return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var obj;
+        try { obj = JSON.parse(String(reader.result)); } catch (er) { msg.textContent = 'JSON 형식이 올바르지 않습니다.'; return; }
+        var check = S.validateBackup(obj);
+        if (!check.ok) { msg.textContent = '파일 검사 실패: ' + check.errors.join(' / '); return; }
+        run(obj, '백업 파일');
+      };
+      reader.readAsText(f, 'utf-8');
+      e.target.value = '';
+    };
+  }
+
   function renderData() {
+    if (S.isRemote()) { renderDataRemote(); return; }
     var c = S.counts();
     $main.innerHTML = '<div class="page-head"><div><span class="eyebrow">DATA</span><h1>데이터 관리</h1><p>백업·복원과 샘플 데이터를 관리합니다.</p></div></div>' +
       '<div class="notice danger"><strong>중요:</strong> 현재 시제품은 데이터를 <strong>이 브라우저(기기)에만</strong> 저장합니다. 다른 PC와 자동 동기화되지 않고, 암호화·사용자별 권한 관리가 없으며, 브라우저 데이터 삭제 시 함께 지워집니다. 실제 이용자 정보 입력 전 서버 DB·로그인 도입이 필요합니다(SECURITY.md 참고).</div>' +
@@ -647,16 +717,7 @@
       '<button type="button" class="btn danger" id="clear-all">모든 데이터 지우기</button></div></section>' +
       '</div>';
 
-    document.getElementById('backup').onclick = function () {
-      if (window.PPP_PREVIEW) { toast('미리보기에서는 파일 내려받기가 막혀 있습니다.'); return; }
-      var blob = new Blob([S.exportJson()], { type: 'application/json' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'ppp-backup-' + today() + '.json';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-      toast('백업 파일을 내려받았습니다.');
-    };
+    document.getElementById('backup').onclick = downloadBackup;
     document.getElementById('restore-file').onchange = function (e) {
       var f = e.target.files[0];
       var msg = document.getElementById('restore-msg');
@@ -764,10 +825,14 @@
   };
 
   function personForm(p) {
-    openForm('persons', p || { code: S.nextPersonCode(), stage: '준비', enrolledAt: today(), priorities: [] }, function (rec) {
-      var saved = S.upsert('persons', rec);
-      toast(p ? '이용자 정보를 수정했습니다.' : '새 책을 만들었습니다.');
-      if (p) refreshView(); else { ui.chapter = 'intake'; location.hash = '#/person/' + encodeURIComponent(saved.id); }
+    var me = S.me();
+    var blank = { code: S.nextPersonCode(), stage: '준비', enrolledAt: today(), priorities: [] };
+    if (me) blank.workerId = me.staffId;
+    openForm('persons', p || blank, function (rec) {
+      return Promise.resolve(S.upsert('persons', rec)).then(function (saved) {
+        toast(p ? '이용자 정보를 수정했습니다.' : '새 책을 만들었습니다.' + (S.isRemote() ? ' 관리코드 ' + saved.code : ''));
+        if (p) refreshView(); else { ui.chapter = 'intake'; location.hash = '#/person/' + encodeURIComponent(saved.id); }
+      });
     }, !p);
   }
 
@@ -778,14 +843,33 @@
     if (col === 'evaluations') defaults.period = '분기';
     openForm(col, rec || defaults, function (r) {
       r.personId = p.id;
-      S.upsert(col, r);
-      toast(rec ? '기록을 수정했습니다.' : '기록을 추가했습니다.');
-      refreshView();
+      return Promise.resolve(S.upsert(col, r)).then(function () {
+        toast(rec ? '기록을 수정했습니다.' : '기록을 추가했습니다.');
+        refreshView();
+      });
     }, !rec);
   }
 
-  function openForm(col, rec, onSave, isNew) {
+  function formSpec(col, isNew) {
     var spec = FORMS[col];
+    if (col !== 'persons' || !S.isRemote()) return spec;
+    var me = S.me();
+    return Object.assign({}, spec, {
+      fields: spec.fields.map(function (f) {
+        if (f.name === 'worker') {
+          var opts = S.staffOptions();
+          // 담당자 역할은 본인만 담당자로 지정할 수 있다(RLS)
+          if (me && me.role === 'worker') opts = opts.filter(function (o) { return o.value === me.staffId; });
+          return { name: 'workerId', label: '담당자', type: 'select', options: opts, required: true };
+        }
+        if (f.name === 'code' && isNew) return Object.assign({}, f, { hint: '저장하면 서버가 자동으로 매깁니다' });
+        return f;
+      })
+    });
+  }
+
+  function openForm(col, rec, onSave, isNew) {
+    var spec = formSpec(col, isNew);
     var dlg = document.getElementById('modal');
     document.getElementById('modal-title').textContent = spec.title + (isNew ? ' 추가' : ' 수정');
     var body = document.getElementById('modal-body');
@@ -857,8 +941,16 @@
         if (fi) fi.focus();
         return;
       }
-      dlg.close();
-      onSave(out);
+      var btn = document.getElementById('modal-submit');
+      btn.disabled = true;
+      btn.textContent = '저장 중…';
+      // 서버 저장이 끝난 뒤에 창을 닫고, 실패하면 입력 내용을 그대로 둔 채 이유를 보여 준다
+      Promise.resolve().then(function () { return onSave(out); }).then(function () {
+        dlg.close();
+      }, function (e) {
+        err.textContent = '저장하지 못했습니다. ' + ((e && e.message) || e);
+        err.hidden = false;
+      }).then(function () { btn.disabled = false; btn.textContent = '저장'; });
     };
     dlg.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { dlg.close(); }; });
     dlg.showModal();
@@ -885,7 +977,10 @@
     var control;
     if (f.type === 'select') {
       control = '<select class="input" id="' + id + '"' + aria + '>' + (f.required ? '' : (f.options[0] === '' ? '' : '<option value="">선택 안 함</option>')) +
-        f.options.map(function (o) { return '<option value="' + esc(o) + '"' + (String(v) === o ? ' selected' : '') + '>' + (o === '' ? '선택 안 함' : esc(o)) + '</option>'; }).join('') + '</select>';
+        f.options.map(function (o) {
+          var val = typeof o === 'object' ? o.value : o, lab = typeof o === 'object' ? o.label : o;
+          return '<option value="' + esc(val) + '"' + (String(v) === val ? ' selected' : '') + '>' + (val === '' ? '선택 안 함' : esc(lab)) + '</option>';
+        }).join('') + '</select>';
     } else if (f.type === 'textarea') {
       control = '<textarea class="input" id="' + id + '"' + aria + (f.maxlength ? ' maxlength="' + f.maxlength + '"' : '') + '>' + esc(v) + '</textarea>';
     } else {
@@ -937,13 +1032,78 @@
   };
 
   /* ---------- 시작 ---------- */
-  var loaded = S.load();
   var banner = document.getElementById('banner');
-  if (loaded === 'sample') {
-    banner.hidden = false;
-    banner.textContent = '가상 샘플 데이터로 시작했습니다. 실제 이용자 정보가 아닙니다. 데이터는 이 브라우저에만 저장됩니다.';
+  var started = false;
+
+  function start(res) {
+    if (res.mode === 'local' && res.loaded === 'sample') {
+      banner.hidden = false;
+      banner.textContent = '가상 샘플 데이터로 시작했습니다. 실제 이용자 정보가 아닙니다. 데이터는 이 브라우저에만 저장됩니다.';
+    }
+    if (res.state !== 'ready') { renderGate(res); return; }
+    renderUserBox(res.me);
+    started = true;
+    route();
   }
+
+  /* 로그인 전·직원 명단에 없음·연결 오류 화면 */
+  function renderGate(res) {
+    document.querySelector('.main-nav').hidden = true;
+    var html = '<div class="gate"><div class="card gate-card"><span class="eyebrow">PPP 이야기 서재</span>';
+    if (res.state === 'signedOut') {
+      html += '<h1>로그인</h1><p>기관에서 직원으로 등록한 계정으로 로그인하세요. 등록되지 않은 계정은 로그인해도 기록을 볼 수 없습니다.</p>' +
+        '<button type="button" class="btn primary gate-btn" id="login-google">Google 계정으로 로그인</button>' +
+        '<div class="gate-or"><span>또는 이메일로 로그인 링크 받기</span></div>' +
+        '<form id="login-email" class="gate-form" novalidate><label for="login-email-input" class="sr-only">이메일</label>' +
+        '<input id="login-email-input" class="input" type="email" autocomplete="email" placeholder="name@기관도메인" required>' +
+        '<button type="submit" class="btn">링크 받기</button></form><p id="login-msg" class="muted" role="status"></p>';
+    } else if (res.state === 'notStaff') {
+      html += '<h1>직원 등록이 필요합니다</h1><p><strong>' + esc(res.email || '') + '</strong> 계정은 아직 직원 명단에 없거나 사용이 중지되었습니다.</p>' +
+        '<p>관리자에게 이 이메일로 직원 등록을 요청하세요. 등록 후 다시 로그인하면 바로 사용할 수 있습니다.</p>' +
+        '<button type="button" class="btn" id="logout">다른 계정으로 로그인</button>';
+    } else {
+      html += '<h1>서버에 연결하지 못했습니다</h1><p>' + esc(res.message || '') + '</p>' +
+        '<button type="button" class="btn primary" id="retry">다시 시도</button>';
+    }
+    $main.innerHTML = html + '</div></div>';
+    var g = document.getElementById('login-google');
+    if (g) g.onclick = function () {
+      S.signInGoogle().catch(function (e) { document.getElementById('login-msg').textContent = e.message; });
+    };
+    var f = document.getElementById('login-email');
+    if (f) f.onsubmit = function (e) {
+      e.preventDefault();
+      var email = document.getElementById('login-email-input').value.trim().toLowerCase();
+      var msg = document.getElementById('login-msg');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = '이메일 주소를 확인하세요.'; return; }
+      msg.textContent = '보내는 중…';
+      S.signInEmail(email).then(function () {
+        msg.textContent = email + ' 으로 로그인 링크를 보냈습니다. 메일의 링크를 이 브라우저에서 여세요.';
+      }, function (er) { msg.textContent = '보내지 못했습니다. ' + er.message; });
+    };
+    var lo = document.getElementById('logout');
+    if (lo) lo.onclick = function () { S.signOut().then(function () { location.reload(); }); };
+    var rt = document.getElementById('retry');
+    if (rt) rt.onclick = function () { location.reload(); };
+  }
+
+  var ROLE_LABEL = { admin: '관리자', manager: '팀장', worker: '담당자' };
+  function renderUserBox(me) {
+    var box = document.getElementById('user-box');
+    if (!me || !box) return;
+    box.hidden = false;
+    box.innerHTML = '<span class="user-name">' + esc(me.name) + ' <small>' + esc(ROLE_LABEL[me.role] || me.role) + '</small></span>' +
+      '<button type="button" id="logout-btn">로그아웃</button>';
+    document.getElementById('logout-btn').onclick = function () {
+      S.signOut().then(function () { location.hash = '#/'; location.reload(); });
+    };
+  }
+
+  $main.innerHTML = '<div class="empty"><strong>불러오는 중…</strong></div>';
+  S.init().then(start, function (e) { start({ state: 'error', message: e.message }); });
+
   window.addEventListener('hashchange', function () {
+    if (!started) return;
     var wasVillage = window.Village && window.Village.isMounted();
     route();
     // 마을 안에서 집·방을 옮길 때는 3D 화면 초점을 빼앗지 않는다
@@ -952,5 +1112,4 @@
       window.scrollTo(0, 0);
     }
   });
-  route();
 })();

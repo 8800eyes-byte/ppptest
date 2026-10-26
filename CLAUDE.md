@@ -19,14 +19,17 @@
 - 차트: 직접 만든 SVG(`js/charts.js`), 외부 차트 라이브러리 금지
 - 3D: three.js r128(cdnjs, 버전 고정) — 3D 마을에만 사용. 불러오지 못하면 마을 대신 서재로 안내
 - 폰트: Google Fonts(Noto Sans KR / Noto Serif KR), 실패 시 시스템 폰트
-- 저장: 현재 `localStorage`(시제품) → 목표는 **서버 DB**(DATA_MODEL.md §5, DEVELOPMENT_PLAN.md 3단계)
+- 저장: `js/config.js`에 Supabase 값이 있으면 **Supabase**(supabase-js 2.117.3, jsdelivr), 없으면 `localStorage` 시제품 모드
+- `Store.upsert/remove`는 서버 모드에서 Promise를 돌려준다. 화면 코드는 항상 `Promise.resolve(...)`로 기다린다
 - 배포: Vercel 정적 호스팅(빌드 명령 없음, 루트 = 출력 디렉터리)
 
 ## 4. 파일 구조
 ```
 index.html            앱 셸(헤더·모달·스크립트 로드)
 css/style.css         디자인 토큰과 전체 스타일(인쇄 스타일 포함)
-js/store.js           저장소 계층 · 백업 검증 — 서버 DB 전환 시 이 파일만 교체
+js/store.js           브라우저 저장소 · 백업 검증 · 선택지 상수
+js/config.js          Supabase URL·publishable 키(비우면 브라우저 저장 모드)
+js/remote-store.js    Supabase 저장소: 로그인·불러오기·저장·보관 처리(Store API를 서버용으로 교체)
 js/sample-data.js     가상 샘플 데이터 생성기
 js/charts.js          SVG 차트(가로 막대·세로 막대·선) + 툴팁 + 표로 보기
 js/village.js         3D 마을·집 안 방(three.js), 장 내용은 app.js의 PPPApp 함수 재사용

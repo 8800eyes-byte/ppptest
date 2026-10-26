@@ -161,6 +161,10 @@
     load: load, list: list, get: get, upsert: upsert, remove: remove,
     nextPersonCode: nextPersonCode, exportJson: exportJson, importJson: importJson,
     validateBackup: validateBackup, counts: counts, resetToSample: resetToSample, clearAll: clearAll,
-    isStorageOk: function () { return storageOk; }
+    isStorageOk: function () { return storageOk; },
+    // 브라우저 저장 모드: 로그인 없이 바로 시작. remote-store.js가 있으면 아래를 서버용으로 바꾼다
+    init: function () { return Promise.resolve({ state: 'ready', mode: 'local', loaded: load() }); },
+    isRemote: function () { return false; },
+    me: function () { return null; }
   };
 })();

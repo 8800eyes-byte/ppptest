@@ -2,7 +2,7 @@
 
 `schema.sql`은 PPP 이야기 서재의 서버 DB 구조입니다. **모든 테이블에 RLS(행 단위 보안)가 켜져 있고**, 직원 명단에 등록된 계정만 정해진 범위의 데이터를 볼 수 있습니다.
 
-> 앱(`js/store.js`)은 아직 브라우저 저장 방식입니다. Supabase 연결 코드는 다음 단계에서 붙입니다(DEVELOPMENT_PLAN.md 3단계).
+> 앱은 `js/config.js`의 값으로 이 프로젝트에 연결됩니다(`js/remote-store.js`).
 
 ## 권한 구조
 | 역할 | 이용자·기록 | 직원 명단 | 삭제 | 변경기록 |
@@ -31,6 +31,20 @@
 5. **직원 추가**: 관리자가 `staff`에 이메일·이름·역할을 넣습니다. 그 사람이 처음 로그인하면(이메일 인증된 계정) 자동으로 연결됩니다.
 6. **앱에 넣을 값**: Project Settings → API의 **Project URL**과 **anon public key**만 사용합니다. 이 두 값은 화면에 공개되어도 RLS가 막아 줍니다.
    - ⚠️ **service_role key는 앱·문서·메신저 어디에도 넣지 마세요.** RLS를 무시하는 관리자 키입니다.
+
+## 로그인 주소 설정 (꼭 필요)
+Authentication → **URL Configuration**
+- **Site URL**: 앱을 여는 주소(예: Vercel 주소 `https://ppp-xxxx.vercel.app`)
+- **Redirect URLs**: 같은 주소를 추가. PC에서 직접 열어 시험한다면 `http://localhost:8000`도 추가
+이 설정이 없으면 로그인 후 엉뚱한 주소로 돌아갑니다.
+
+이메일 로그인 링크: Supabase 기본 메일 발송은 시간당 몇 통으로 제한됩니다. 직원이 많아지면 Authentication → Emails에서 기관 메일(SMTP)을 연결하세요.
+
+## 시험 데이터 지우기 (관리자, SQL Editor)
+앱의 ‘데이터 관리 → 시험용 가상 데이터 넣기’로 넣은 데이터를 실제 사용 전에 지웁니다. **모든 이용자와 기록이 영구 삭제**되므로 실제 데이터를 넣기 전에만 실행하세요.
+```sql
+delete from public.persons;
+```
 
 ## 직원 관리 예시 (관리자, SQL Editor)
 ```sql

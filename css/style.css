@@ -455,3 +455,18 @@ main.village-mode { max-width: none; padding: 0; }
   .v-panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 62%; border-radius: 16px 16px 0 0; }
   .village.panel-open .v-ctrl { display: none; }
 }
+
+/* ---------- 로그인·사용자 ---------- */
+.user-box { display: flex; align-items: center; gap: 8px; color: #dfe5f2; font-size: .88rem; }
+.user-box small { color: var(--gold-300); }
+.user-box button { background: none; border: 1px solid rgba(255, 255, 255, .25); color: #fff; border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 36px; }
+.user-box button:hover { background: rgba(255, 255, 255, .1); }
+.gate { min-height: 60vh; display: grid; place-items: center; }
+.gate-card { width: min(440px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.gate-card h1 { margin: 0; }
+.gate-card p { margin: 0; color: var(--text-2); }
+.gate-btn { width: 100%; min-height: 48px; }
+.gate-or { display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: .82rem; }
+.gate-or::before, .gate-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.gate-form { display: flex; gap: 8px; }
+.gate-form .input { flex: 1; min-width: 0; }

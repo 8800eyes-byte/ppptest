@@ -5,5 +5,7 @@
  */
 window.PPP_CONFIG = {
   supabaseUrl: 'https://kpwggxtrvzgqiaekatxc.supabase.co',
-  supabaseKey: 'sb_publishable_5_uCeOz_F1vBG7kNCpE0Lw_f79cES-n'
+  supabaseKey: 'sb_publishable_5_uCeOz_F1vBG7kNCpE0Lw_f79cES-n',
+  // Supabase에서 Google 로그인을 설정한 뒤 true로 바꾼다(supabase/README.md)
+  googleLogin: false
 };

@@ -26,8 +26,9 @@
    insert into public.staff (email, name, role) values ('관리자이메일@기관도메인', '관리자', 'admin');
    ```
 4. **로그인 방식**: Authentication → Sign In / Providers
-   - **Google** 켜기(기관 구글 계정). Google Cloud에서 OAuth 클라이언트를 만들어 Client ID/Secret을 넣습니다. 연결 단계에서 화면 순서대로 안내합니다.
-   - **Email 가입(Allow new users to sign up)은 끄기** 권장: 명단에 없는 사람은 어차피 아무것도 볼 수 없지만, 불필요한 계정 생성을 막습니다.
+   - 기본은 **이메일 로그인 링크**입니다(설정 불필요).
+   - **Google**(선택): Google Cloud에서 OAuth 클라이언트를 만들어 Supabase Google 제공자에 Client ID/Secret을 넣고, `js/config.js`의 `googleLogin`을 `true`로 바꾸면 로그인 화면에 Google 버튼이 나타납니다. 리디렉션 URI: `https://<프로젝트>.supabase.co/auth/v1/callback`
+   - 이메일 링크 로그인은 처음 로그인할 때 계정을 만들므로 **Allow new users to sign up은 켜 둡니다**. 명단에 없는 사람은 로그인해도 아무것도 볼 수 없습니다.
 5. **직원 추가**: 관리자가 `staff`에 이메일·이름·역할을 넣습니다. 그 사람이 처음 로그인하면(이메일 인증된 계정) 자동으로 연결됩니다.
 6. **앱에 넣을 값**: Project Settings → API의 **Project URL**과 **anon public key**만 사용합니다. 이 두 값은 화면에 공개되어도 RLS가 막아 줍니다.
    - ⚠️ **service_role key는 앱·문서·메신저 어디에도 넣지 마세요.** RLS를 무시하는 관리자 키입니다.

@@ -1051,12 +1051,13 @@
     document.querySelector('.main-nav').hidden = true;
     var html = '<div class="gate"><div class="card gate-card"><span class="eyebrow">PPP 이야기 서재</span>';
     if (res.state === 'signedOut') {
-      html += '<h1>로그인</h1><p>기관에서 직원으로 등록한 계정으로 로그인하세요. 등록되지 않은 계정은 로그인해도 기록을 볼 수 없습니다.</p>' +
-        '<button type="button" class="btn primary gate-btn" id="login-google">Google 계정으로 로그인</button>' +
-        '<div class="gate-or"><span>또는 이메일로 로그인 링크 받기</span></div>' +
+      var google = window.PPP_CONFIG && window.PPP_CONFIG.googleLogin;
+      html += '<h1>로그인</h1><p>기관에서 직원으로 등록한 이메일을 넣으면 로그인 링크를 보내 드립니다. 메일의 링크를 이 브라우저에서 열면 로그인됩니다.</p>' +
         '<form id="login-email" class="gate-form" novalidate><label for="login-email-input" class="sr-only">이메일</label>' +
         '<input id="login-email-input" class="input" type="email" autocomplete="email" placeholder="name@기관도메인" required>' +
-        '<button type="submit" class="btn">링크 받기</button></form><p id="login-msg" class="muted" role="status"></p>';
+        '<button type="submit" class="btn primary">로그인 링크 받기</button></form><p id="login-msg" class="muted" role="status"></p>' +
+        (google ? '<div class="gate-or"><span>또는</span></div><button type="button" class="btn gate-btn" id="login-google">Google 계정으로 로그인</button>' : '') +
+        '<p class="muted">등록되지 않은 이메일은 로그인해도 기록을 볼 수 없습니다.</p>';
     } else if (res.state === 'notStaff') {
       html += '<h1>직원 등록이 필요합니다</h1><p><strong>' + esc(res.email || '') + '</strong> 계정은 아직 직원 명단에 없거나 사용이 중지되었습니다.</p>' +
         '<p>관리자에게 이 이메일로 직원 등록을 요청하세요. 등록 후 다시 로그인하면 바로 사용할 수 있습니다.</p>' +
